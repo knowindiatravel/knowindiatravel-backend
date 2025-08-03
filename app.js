@@ -11,14 +11,16 @@ app.use(express.json({ limit: "2mb" }));
 app.use(
   cors({
     origin: [
-      "http://localhost:5173", // Development
-      "http://knowindiatravel.com",
-      "https://knowindiatravel.com",
+      "https://knowindiatravel.com", // Production frontend
+      "https://www.knowindiatravel.com",
+      "https://api.knowindiatravel.com", // Your backend API
+      "http://localhost:5173", // Keep for development
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
+
 app.use(bp.json());
 app.use(bp.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "client", "dist")));
@@ -187,7 +189,7 @@ app.post("/Update", async (req, res) => {
   if (user_email) {
     const { data, error } = await supabase.auth.resetPasswordForEmail(
       user_email,
-      { redirectTo: "http://localhost:5173/Password" }
+      { redirectTo: "https://knowindiatravel.com/Password" }
     );
 
     if (error) {
