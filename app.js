@@ -29,25 +29,32 @@ const url = process.env.VITE_SUPABASE_URL;
 const key = process.env.VITE_SUPABASE_KEY;
 const secret = process.env.VITE_SUPABASE_SECRET_KEY;
 
-// connection with DataBase
+//connection with DataBase
 const supabase = createClient(url, key);
 const supabase2 = createClient(url, secret);
 
-// Home-route
+//Home-route
 app.get("/", (req, res) => {
   return res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
 });
 
-// Signup-route
+//Signup-route
 app.post("/Signup", async (req, res) => {
-  const { username, email: useremail, password: userpassword, Pass: userpass, country: usercountry, phone: userphone, image } = req.body;
+  const username = req.body.username;
+  const useremail = req.body.email;
+  const userpassword = req.body.password;
+  const userpass = req.body.Pass;
+  const usercountry = req.body.country;
+  const userphone = req.body.phone;
 
+  const image = req.body.image;
   const base64data = image.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(base64data, "base64");
+
   const fileExt = image.match(/^data:image\/(\w+);base64,/)[1];
   const fileName = `${Date.now()}.${fileExt}`;
 
-  if (userpassword !== userpass) {
+  if (userpassword != userpass) {
     return res.json({ message: "password do not match" });
   }
 
@@ -75,51 +82,56 @@ app.post("/Signup", async (req, res) => {
   if (autherror) {
     console.log("Error during authentication!  ->  ", autherror);
     return res.send({ message: autherror.message });
+  } else {
+    const { data: dat, error: err } = await supabase
+      .from("TRAVEL")
+      .select("*")
+      .eq("Email", useremail);
+
+    if (Object.keys(dat).length > 0) {
+      console.log(dat);
+      return res.send({ message: "User already Exist.Please Login" });
+    } else if (err) {
+      console.log(err);
+    } else {
+      const { data: idata, error: ierror } = await supabase.storage
+        .from("tourist-profile-pics")
+        .upload(fileName, buffer, {
+          contentType: `image/${fileExt}`,
+        });
+
+      console.log(idata);
+      console.log(ierror);
+
+      if (ierror) return res.send({ message: ierror.message });
+
+      const { data: newdata, error: newerror } = await supabase
+        .from("TRAVEL")
+        .insert([
+          {
+            UserName: username,
+            Email: useremail,
+            Country: usercountry,
+            "Phone number": userphone,
+            path: fileName,
+          },
+        ])
+        .select();
+
+      if (newerror) {
+        console.log("Error during insertion!  ->  ", newerror);
+        return res.send({ message: newerror.message });
+      } else {
+        return res.send({ message: "Email sent" });
+      }
+    }
   }
-
-  const { data: dat, error: err } = await supabase
-    .from("TRAVEL")
-    .select("*")
-    .eq("Email", useremail);
-
-  if (Object.keys(dat).length > 0) {
-    return res.send({ message: "User already Exist.Please Login" });
-  } else if (err) {
-    console.log(err);
-    return res.send({ message: err.message });
-  }
-
-  const { data: idata, error: ierror } = await supabase.storage
-    .from("tourist-profile-pics")
-    .upload(fileName, buffer, {
-      contentType: `image/${fileExt}`,
-    });
-
-  if (ierror) return res.send({ message: ierror.message });
-
-  const { error: newerror } = await supabase
-    .from("TRAVEL")
-    .insert([
-      {
-        UserName: username,
-        Email: useremail,
-        Country: usercountry,
-        "Phone number": userphone,
-        path: fileName,
-      },
-    ])
-    .select();
-
-  if (newerror) {
-    console.log("Error during insertion!  ->  ", newerror);
-    return res.send({ message: newerror.message });
-  }
-  return res.send({ message: "Email sent" });
 });
 
-// Login-route
+//Login-route
 app.post("/Login", async (req, res) => {
-  const { email, password: pass } = req.body;
+  const email = req.body.email;
+  const pass = req.body.password;
 
   const {
     data: { session, user },
@@ -131,7 +143,10 @@ app.post("/Login", async (req, res) => {
 
   if (error) {
     console.log(error);
-    return res.send({ message: error.message, sess: null });
+    return res.send({
+      message: error.message,
+      sess: null,
+    });
   }
 
   if (user) {
@@ -140,134 +155,213 @@ app.post("/Login", async (req, res) => {
       .select("path")
       .eq("Email", email);
 
-    if (e) return res.send({ message: e.message, sess: null });
-
     const { data: dat } = supabase.storage
       .from("tourist-profile-pics")
       .getPublicUrl(filePath[0].path);
 
-    return res.send({ message: dat.publicUrl, sess: session });
+    if (dat) {
+      return res.send({
+        message: dat.publicUrl,
+        sess: session,
+      });
+    }
   }
-
-  return res.send({ message: "Login failed", sess: null });
 });
 
-// Email confirmation Route
+//Email confirmation Route
 app.post("/Update", async (req, res) => {
-  const { email: user_email } = req.body;
+  const user_email = req.body.email;
 
-  if (!user_email) return res.send({ message: "No email provided" });
+  if (user_email) {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(
+      user_email,
+      { redirectTo: "https://knowindiatravel.com/Password" }
+    );
 
-  const { data, error } = await supabase.auth.resetPasswordForEmail(user_email, {
-    redirectTo: "https://knowindiatravel.com/Password",
-  });
-
-  if (error) return res.send({ message: error.message });
-  return res.send({ message: "Password reset link sent" });
+    if (error) {
+      console.log(error);
+      return res.send({ message: error.message });
+    }
+    if (data) {
+      console.log(data);
+      return res.send({ message: "Password reset link sent" });
+    }
+  } else {
+    console.log("NO email");
+  }
 });
 
-// Admin Login-route
+//Admin Login-route
 app.post("/AdminLogin", async (req, res) => {
   const { admin_email, admin_password } = req.body;
 
-  if (admin_email == process.env.admin_email && admin_password == process.env.admin_password) {
+  const email = process.env.admin_email;
+  const pass = process.env.admin_password;
+
+  if (admin_email == email && admin_password == pass) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: admin_email,
       password: admin_password,
     });
 
-    if (error) return res.send({ message: "Wrong credentials", error: error.message });
-    return res.send({ message: data.user.email, error: "" });
+    if (error) {
+      console.log(error);
+      return res.send({ message: "Wrong credentials", error: error.message });
+    }
+
+    if (data) {
+      return res.send({
+        message: data.user.email,
+        error: "",
+      });
+    }
   }
   return res.send({});
 });
 
 // List User Route
 app.get("/UserList", async (req, res) => {
-  const { data: { users }, error } = await supabase2.auth.admin.listUsers();
-  if (error) return res.json([]);
+  const {
+    data: { users },
+    error,
+  } = await supabase2.auth.admin.listUsers();
+
+  if (error) {
+    console.log(error.message);
+    return res.json([]);
+  }
+
   return res.json(users);
 });
 
-// Traveller list
 app.get("/Travellerlist", async (req, res) => {
   const { data, error } = await supabase.from("TRIP").select("*");
-  if (error) return res.json([]);
+
+  if (error) {
+    console.log(error.message);
+    return res.json([]);
+  }
+
   return res.json(data);
 });
 
 // Delete User Route
 app.post("/DeleteUser", async (req, res) => {
   const { id, email } = req.body;
+  console.log(id);
 
-  const { error } = await supabase2.auth.admin.deleteUser(id);
-  if (error) return res.send({ message: error.message });
+  const { data, error } = await supabase2.auth.admin.deleteUser(id);
 
-  const { error: err } = await supabase.from("TRAVEL").delete().eq("Email", email).select();
-  if (err) return res.send({ message: err.message });
+  if (error) {
+    return res.send({ message: error.message });
+  }
 
+  const { data: dat, error: err } = await supabase
+    .from("TRAVEL")
+    .delete()
+    .eq("Email", email)
+    .select();
+
+  if (err) {
+    return res.send({ message: err.message });
+  }
   return res.send({ message: "User deleted Successfully" });
 });
 
 // Trip Data Route
 app.post("/Tripdata", async (req, res) => {
-  const { id, name, email, phone, destination, travelDate, travelers, tripType, message } = req.body;
-
-  const { data, error: err } = await supabase.from("TRIP").insert({
-    User_id: id,
-    travelDate,
+  const {
+    id,
     name,
     email,
     phone,
-    travelers,
-    type: tripType,
     destination,
+    travelDate,
+    travelers,
+    tripType,
     message,
-  }).select();
+  } = req.body;
 
-  if (!data) return res.send({ message: err.message, error: "True" });
+  const { data, error: err } = await supabase
+    .from("TRIP")
+    .insert({
+      User_id: id,
+      travelDate: travelDate,
+      name: name,
+      email: email,
+      phone: phone,
+      travelers: travelers,
+      type: tripType,
+      destination: destination,
+      message: message,
+    })
+    .select();
 
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: { user: process.env.admin_email, pass: process.env.app_password },
-  });
-
-  try {
-    await transporter.sendMail({
-      from: process.env.admin_email,
-      to: email,
-      subject: "Booking email",
-      text: "Thank you for your booking request! Our travel expert will contact you within 24 hours.",
+  if (data) {
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.admin_email,
+        pass: process.env.app_password,
+      },
     });
-    return res.send({ message: "Check ur email", error: "False" });
-  } catch (error) {
-    return res.send({ message: error.message, error: "True" });
+
+    try {
+      await transporter.sendMail({
+        from: process.env.admin_email,
+        to: email,
+        subject: "Booking email",
+        text: "Thank you for your booking request! Our travel expert will contact you within 24 hours.",
+      });
+      return res.send({ message: "Check ur email", error: "False" });
+    } catch (error) {
+      return res.send({ message: error.message, error: "True" });
+    }
+  } else {
+    return res.send({ message: err.message, error: "True" });
   }
 });
 
-// Blogs route
 app.post("/Blogs", async (req, res) => {
   const { title, rating, comment, excerpt, name, email } = req.body;
 
-  const { data, error } = await supabase.from("TRAVEL").select("path").eq("Email", email);
+  const { data, error } = await supabase
+    .from("TRAVEL")
+    .select("path")
+    .eq("Email", email);
+
+  const { data: dat, error: e } = supabase.storage
+    .from("tourist-profile-pics")
+    .getPublicUrl(data[0].path);
+
   if (error) return res.send({ message: error.message, url: "" });
+  if (data) {
+    const { data: insert, error: e2 } = await supabase
+      .from("Comments")
+      .insert({
+        Name: name,
+        path: dat.publicUrl,
+        title: title,
+        ratings: rating,
+        comment: comment,
+        excerpt: excerpt,
+      })
+      .select("*");
 
-  const { data: dat } = supabase.storage.from("tourist-profile-pics").getPublicUrl(data[0].path);
-
-  const { data: insert, error: e } = await supabase.from("Comments").insert({
-    Name: name,
-    path: dat.publicUrl,
-    title,
-    ratings: rating,
-    comment,
-    excerpt,
-  }).select("*");
-
-  if (insert) return res.send({ message: insert, url: dat.publicUrl });
-  if (e) return res.send({ message: e.message, url: "" });
+    if (insert)
+      return res.send({
+        message: insert,
+        url: dat.publicUrl,
+      });
+    if (e2)
+      return res.send({
+        message: e2.message,
+        url: "",
+      });
+  }
 });
 
 const PORT = process.env.PORT;
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+app.listen(PORT, console.log(`Server started on port ${PORT}`));
