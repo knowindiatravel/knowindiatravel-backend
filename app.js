@@ -58,7 +58,7 @@ app.post("/Signup", async (req, res) => {
     return res.json({ message: "password do not match" });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabase2
     .from("TRAVEL")
     .select("*")
     .eq("UserName", username);
@@ -67,7 +67,7 @@ app.post("/Signup", async (req, res) => {
     return res.json({ message: "UserName is already taken." });
   }
 
-  const { data: authdata, error: autherror } = await supabase.auth.signUp({
+  const { data: authdata, error: autherror } = await supabase2.auth.signUp({
     email: useremail,
     password: userpassword,
     options: {
@@ -83,7 +83,7 @@ app.post("/Signup", async (req, res) => {
     console.log("Error during authentication!  ->  ", autherror);
     return res.send({ message: autherror.message });
   } else {
-    const { data: dat, error: err } = await supabase
+    const { data: dat, error: err } = await supabase2
       .from("TRAVEL")
       .select("*")
       .eq("Email", useremail);
@@ -94,7 +94,7 @@ app.post("/Signup", async (req, res) => {
     } else if (err) {
       console.log(err);
     } else {
-      const { data: idata, error: ierror } = await supabase.storage
+      const { data: idata, error: ierror } = await supabase2.storage
         .from("tourist-profile-pics")
         .upload(fileName, buffer, {
           contentType: `image/${fileExt}`,
@@ -105,7 +105,7 @@ app.post("/Signup", async (req, res) => {
 
       if (ierror) return res.send({ message: ierror.message });
 
-      const { data: newdata, error: newerror } = await supabase
+      const { data: newdata, error: newerror } = await supabase2
         .from("TRAVEL")
         .insert([
           {
