@@ -12,10 +12,10 @@ app.use(express.json({ limit: "2mb" }));
 app.use(
   cors({
     origin: [
-      "https://knowindiatravel.com", // Production frontend
+      "https://knowindiatravel.com",
       "https://www.knowindiatravel.com",
-      "https://api.knowindiatravel.com", // Your backend API
-      "http://localhost:5173", // Keep for development
+      "https://api.knowindiatravel.com",
+      "http://localhost:5173",
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
@@ -36,8 +36,8 @@ const url = process.env.VITE_SUPABASE_URL;
 const key = process.env.VITE_SUPABASE_KEY;
 const secret = process.env.VITE_SUPABASE_SECRET_KEY;
 
-const supabase = createClient(url, key);
-const supabase2 = createClient(url, secret);
+const supabase = createClient(url, key); // public
+const supabase2 = createClient(url, secret); // service role
 
 // Home route
 app.get("/", (req, res) => {
@@ -45,27 +45,31 @@ app.get("/", (req, res) => {
   if (fs.existsSync(indexPath)) {
     return res.sendFile(indexPath);
   }
-  return res.send("Backend is running. No frontend build found.");
+  return res.json({ message: "Backend is running. No frontend build found." });
 });
 
-// Signup
+// ✅ Signup
 app.post("/Signup", async (req, res) => {
   try {
     const { username, email, password, Pass, country, phone, image } = req.body;
 
     if (password !== Pass) {
-      return res.json({ message: "password do not match" });
+      return res.json({ message: "Passwords do not match" });
     }
 
-    // Check if username exists
-    // const { data: existingUser } = await supabase2
-    //   .from("TRAVEL")
-    //   .select("*")
-    //   .eq("UserName", username);
+    // Check if email already exists in TRAVEL
+    const { data: existing, error: existErr } = await supabase2
+      .from("TRAVEL")
+      .select("*")
+      .eq("Email", email);
 
-    // if (existingUser && existingUser.length > 0) {
-    //   return res.json({ message: "UserName is already taken." });
-    // }
+    if (existErr) {
+      console.error("Check email error:", existErr);
+      return res.json({ message: "Database error" });
+    }
+    if (existing && existing.length > 0) {
+      return res.json({ message: "User already exists. Please Login" });
+    }
 
     // Sign up in Supabase Auth
     const { data: authdata, error: autherror } = await supabase2.auth.signUp({
@@ -75,21 +79,11 @@ app.post("/Signup", async (req, res) => {
     });
 
     if (autherror) {
-      console.log("Auth error:", autherror);
-      return res.send({ message: autherror.message });
+      console.error("Auth error:", autherror);
+      return res.json({ message: autherror.message });
     }
 
-    // Check if email already exists
-    const { data: dat, error: err } = await supabase2
-      .from("TRAVEL")
-      .select("*")
-      .eq("Email", email);
-
-    if (dat && dat.length > 0) {
-      return res.send({ message: "User already Exist. Please Login" });
-    }
-
-    // Handle profile image upload only if image exists
+    // Handle profile image upload
     let fileName = null;
     if (image) {
       try {
@@ -102,9 +96,12 @@ app.post("/Signup", async (req, res) => {
           .from("tourist-profile-pics")
           .upload(fileName, buffer, { contentType: `image/${fileExt}` });
 
-        if (ierror) return res.send({ message: ierror.message });
+        if (ierror) {
+          console.error("Image upload error:", ierror);
+          return res.json({ message: ierror.message });
+        }
       } catch (imgErr) {
-        console.error("Image upload error:", imgErr);
+        console.error("Image processing error:", imgErr);
       }
     }
 
@@ -120,18 +117,18 @@ app.post("/Signup", async (req, res) => {
     ]);
 
     if (newerror) {
-      console.log("Insert error:", newerror);
-      return res.send({ message: newerror.message });
+      console.error("Insert error:", newerror);
+      return res.json({ message: newerror.message });
     }
 
-    return res.send({ message: "Email sent" });
+    return res.json({ message: "Signup successful. Verification email sent." });
   } catch (err) {
     console.error("Signup error:", err);
-    return res.send({ message: "Internal server error" });
+    return res.json({ message: "Internal server error" });
   }
 });
 
-// Login
+// ✅ Login
 app.post("/Login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -142,8 +139,8 @@ app.post("/Login", async (req, res) => {
     } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      console.log(error);
-      return res.send({ message: error.message, sess: null });
+      console.error("Login error:", error);
+      return res.json({ message: error.message, sess: null });
     }
 
     if (user) {
@@ -157,36 +154,36 @@ app.post("/Login", async (req, res) => {
           .from("tourist-profile-pics")
           .getPublicUrl(filePath[0].path);
 
-        return res.send({ message: dat.publicUrl, sess: session });
+        return res.json({ message: dat.publicUrl, sess: session });
       }
     }
 
-    return res.send({ message: "Login failed", sess: null });
+    return res.json({ message: "Login failed", sess: null });
   } catch (err) {
     console.error("Login error:", err);
-    return res.send({ message: "Internal server error", sess: null });
+    return res.json({ message: "Internal server error", sess: null });
   }
 });
 
-// Update (password reset)
+// ✅ Password reset
 app.post("/Update", async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.send({ message: "No email provided" });
+    if (!email) return res.json({ message: "No email provided" });
 
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: "https://knowindiatravel.com/Password",
     });
 
-    if (error) return res.send({ message: error.message });
-    if (data) return res.send({ message: "Password reset link sent" });
+    if (error) return res.json({ message: error.message });
+    if (data) return res.json({ message: "Password reset link sent" });
   } catch (err) {
     console.error(err);
-    return res.send({ message: "Internal server error" });
+    return res.json({ message: "Internal server error" });
   }
 });
 
-// Admin login
+// ✅ Admin login
 app.post("/AdminLogin", async (req, res) => {
   const { admin_email, admin_password } = req.body;
 
@@ -200,50 +197,50 @@ app.post("/AdminLogin", async (req, res) => {
     });
 
     if (error)
-      return res.send({ message: "Wrong credentials", error: error.message });
+      return res.json({ message: "Wrong credentials", error: error.message });
 
-    return res.send({ message: data.user.email, error: "" });
+    return res.json({ message: data.user.email, error: "" });
   }
-  return res.send({});
+  return res.json({});
 });
 
-// User list
+// ✅ User list
 app.get("/UserList", async (req, res) => {
   const { data, error } = await supabase2.auth.admin.listUsers();
   if (error) return res.json([]);
   return res.json(data.users);
 });
 
-// Traveller list
+// ✅ Traveller list
 app.get("/Travellerlist", async (req, res) => {
   const { data, error } = await supabase.from("TRIP").select("*");
   if (error) return res.json([]);
   return res.json(data);
 });
 
-// Delete user
+// ✅ Delete user
 app.post("/DeleteUser", async (req, res) => {
   try {
     const { id, email } = req.body;
 
     const { error } = await supabase2.auth.admin.deleteUser(id);
-    if (error) return res.send({ message: error.message });
+    if (error) return res.json({ message: error.message });
 
     const { error: err } = await supabase
       .from("TRAVEL")
       .delete()
       .eq("Email", email);
 
-    if (err) return res.send({ message: err.message });
+    if (err) return res.json({ message: err.message });
 
-    return res.send({ message: "User deleted Successfully" });
+    return res.json({ message: "User deleted Successfully" });
   } catch (err) {
     console.error("Delete user error:", err);
-    return res.send({ message: "Internal server error" });
+    return res.json({ message: "Internal server error" });
   }
 });
 
-// Trip data
+// ✅ Trip data
 app.post("/Tripdata", async (req, res) => {
   try {
     const {
@@ -270,7 +267,7 @@ app.post("/Tripdata", async (req, res) => {
       message,
     });
 
-    if (err) return res.send({ message: err.message, error: "True" });
+    if (err) return res.json({ message: err.message, error: "True" });
 
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
@@ -286,13 +283,14 @@ app.post("/Tripdata", async (req, res) => {
       text: "Thank you for your booking request! Our travel expert will contact you within 24 hours.",
     });
 
-    return res.send({ message: "Check your email", error: "False" });
+    return res.json({ message: "Check your email", error: "False" });
   } catch (error) {
-    return res.send({ message: error.message, error: "True" });
+    console.error("Tripdata error:", error);
+    return res.json({ message: error.message, error: "True" });
   }
 });
 
-// Blogs
+// ✅ Blogs
 app.post("/Blogs", async (req, res) => {
   try {
     const { title, rating, comment, excerpt, name, email } = req.body;
@@ -302,9 +300,9 @@ app.post("/Blogs", async (req, res) => {
       .select("path")
       .eq("Email", email);
 
-    if (error) return res.send({ message: error.message, url: "" });
+    if (error) return res.json({ message: error.message, url: "" });
     if (!data || data.length === 0)
-      return res.send({ message: "User not found", url: "" });
+      return res.json({ message: "User not found", url: "" });
 
     const { data: dat } = supabase.storage
       .from("tourist-profile-pics")
@@ -322,12 +320,12 @@ app.post("/Blogs", async (req, res) => {
       })
       .select("*");
 
-    if (e2) return res.send({ message: e2.message, url: "" });
+    if (e2) return res.json({ message: e2.message, url: "" });
 
-    return res.send({ message: insert, url: dat.publicUrl });
+    return res.json({ message: insert, url: dat.publicUrl });
   } catch (err) {
     console.error("Blog error:", err);
-    return res.send({ message: "Internal server error", url: "" });
+    return res.json({ message: "Internal server error", url: "" });
   }
 });
 
