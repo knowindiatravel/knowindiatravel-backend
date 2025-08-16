@@ -49,12 +49,13 @@ app.get("/", (req, res) => {
 });
 
 // ✅ Signup
+// ✅ Signup
 app.post("/Signup", async (req, res) => {
   try {
     const { username, email, password, Pass, country, phone, image } = req.body;
 
     if (password !== Pass) {
-      return res.json({ message: "Passwords do not match" });
+      return res.json({ success: false, message: "Passwords do not match" });
     }
 
     // Check if email already exists in TRAVEL
@@ -65,10 +66,10 @@ app.post("/Signup", async (req, res) => {
 
     if (existErr) {
       console.error("Check email error:", existErr);
-      return res.json({ message: "Database error" });
+      return res.json({ success: false, message: "Database error" });
     }
     if (existing && existing.length > 0) {
-      return res.json({ message: "User already exists. Please Login" });
+      return res.json({ success: false, message: "User already exists. Please Login" });
     }
 
     // Sign up in Supabase Auth
@@ -80,7 +81,7 @@ app.post("/Signup", async (req, res) => {
 
     if (autherror) {
       console.error("Auth error:", autherror);
-      return res.json({ message: autherror.message });
+      return res.json({ success: false, message: autherror.message });
     }
 
     // Handle profile image upload
@@ -98,7 +99,7 @@ app.post("/Signup", async (req, res) => {
 
         if (ierror) {
           console.error("Image upload error:", ierror);
-          return res.json({ message: ierror.message });
+          return res.json({ success: false, message: ierror.message });
         }
       } catch (imgErr) {
         console.error("Image processing error:", imgErr);
@@ -118,13 +119,14 @@ app.post("/Signup", async (req, res) => {
 
     if (newerror) {
       console.error("Insert error:", newerror);
-      return res.json({ message: newerror.message });
+      return res.json({ success: false, message: newerror.message });
     }
 
-    return res.json({ message: "Signup successful. Verification email sent." });
+    // ✅ Respond clearly that verification email sent
+    return res.json({ success: true, message: "Signup successful. Verification email sent to your inbox." });
   } catch (err) {
     console.error("Signup error:", err);
-    return res.json({ message: "Internal server error" });
+    return res.json({ success: false, message: "Internal server error" });
   }
 });
 
