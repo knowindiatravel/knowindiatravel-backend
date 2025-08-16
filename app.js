@@ -58,14 +58,14 @@ app.post("/Signup", async (req, res) => {
     }
 
     // Check if username exists
-    const { data: existingUser } = await supabase2
-      .from("TRAVEL")
-      .select("*")
-      .eq("UserName", username);
+    // const { data: existingUser } = await supabase2
+    //   .from("TRAVEL")
+    //   .select("*")
+    //   .eq("UserName", username);
 
-    if (existingUser && existingUser.length > 0) {
-      return res.json({ message: "UserName is already taken." });
-    }
+    // if (existingUser && existingUser.length > 0) {
+    //   return res.json({ message: "UserName is already taken." });
+    // }
 
     // Sign up in Supabase Auth
     const { data: authdata, error: autherror } = await supabase2.auth.signUp({
